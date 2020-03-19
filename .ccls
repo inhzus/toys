@@ -1,0 +1,3 @@
+clang
+-std=gnu++2a
+
