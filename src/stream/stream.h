@@ -7,18 +7,23 @@
 #include "range.h"
 #include "sink.h"
 
-template <typename T> class Stream {
+template <typename T, template <typename... U> typename R> class Stream {
 public:
-  Stream(Range<T> *range) : range_(range) {
+  template <typename... Args> Stream(Args... args) : range_(new R(args...)) {
     sinks_.push_back(new HeadSink<T>());
   }
-  virtual ~Stream() = default;
-  Stream &Map(const std::function<T(const T &)> &func) {
-    sinks_.push_back(new MapSink<T>(func));
+  ~Stream() {
+    delete range_;
+    for (auto p : sinks_) {
+      delete p;
+    }
+  };
+  template <typename Func> Stream &Map(Func func) {
+    sinks_.push_back(new MapSink<T, Func>(std::move(func)));
     return *this;
   }
-  Stream &Filter(const std::function<bool(const T &)> &func) {
-    sinks_.push_back(new FilterSink<T>(func));
+  template <typename Func> Stream &Filter(Func func) {
+    sinks_.push_back(new FilterSink<T, Func>(std::move(func)));
     return *this;
   }
   std::vector<T> Collect() {
@@ -28,6 +33,12 @@ public:
     std::vector<T> vals(std::move(sink->vals()));
     return vals;
   }
+  template <typename Func> std::pair<bool, T> FindFirst(Func func) {
+    auto sink = new FindFirstSink<T, Func>(std::move(func));
+    sinks_.push_back(sink);
+    Evaluate();
+    return {sink->Cancelled(), std::move(sink->val())};
+  }
 
 private:
   void Evaluate() {
@@ -36,11 +47,14 @@ private:
     for (size_t i = 0; i + 1 < sinks_.size(); ++i) {
       sinks_[i]->set_next(sinks_[i + 1]);
     }
-    sinks_[0]->Pre(range_->Size());
+    auto head = sinks_[0];
+    head->Pre(range_->Size());
     while (range_->Valid()) {
-      sinks_[0]->Accept(range_->Next());
+      if (head->Cancelled())
+        break;
+      head->Accept(range_->Next());
     }
-    sinks_[0]->Post();
+    head->Post();
   }
 
   Range<T> *range_;
