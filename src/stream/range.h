@@ -11,6 +11,8 @@
 
 #include "traits.h"
 
+template <typename T> class Stream;
+
 template <typename T> class Range {
 public:
   virtual ~Range() = default;
@@ -18,6 +20,8 @@ public:
   virtual const T &Next() = 0;
   [[nodiscard]] virtual bool Valid() const = 0;
   [[nodiscard]] virtual size_t Size() const = 0;
+
+  Stream<T> Stream();
 };
 
 template <typename It, typename T = std::decay_t<decltype(*std::declval<It>())>>
@@ -42,17 +46,12 @@ public:
       std::enable_if_t<std::is_invocable_r_v<T, Func, const T &>, int> = 0>
   StepRange(T start, T stop, Func func)
       : start_(std::move(start)), stop_(std::move(stop)), val_(start),
-        next_(start), func_(std::move(func)) {
-    static_assert(func_args_decay_to_v<Func, T>);
-    static_assert(func_return_as_v<Func, T>);
-  }
+        next_(start), func_(std::move(func)) {}
   template <typename Step>
   StepRange(T start, T stop, Step step)
       : start_(std::move(start)), stop_(std::move(stop)), val_(start),
         next_(start), func_(std::function<T(const T &)>{
-                          [step](const T &val) { return val + step; }}) {
-    static_assert(func_return_as_v<Func, T>);
-  }
+                          [step](const T &val) { return val + step; }}) {}
 
   const T &Next() final {
     auto tmp = func_(next_);
@@ -60,7 +59,7 @@ public:
     std::swap(next_, tmp);
     return val_;
   }
-  [[nodiscard]] bool Valid() const final { return val_ < stop_; }
+  [[nodiscard]] bool Valid() const final { return val_ != stop_; }
   [[nodiscard]] size_t Size() const final { return 0; }
 
 private:
