@@ -36,6 +36,11 @@ public:
     std::vector<T> vals(std::move(sink->vals()));
     return vals;
   }
+  template <typename Func> void ForEach(Func func) {
+    auto sink = new ForEachSink<T, Func>(std::move(func));
+    sinks_.push_back(sink);
+    Evaluate();
+  }
   template <typename Most> T Most(Most most) {
     auto sink = new MostSink<T, Most>(std::move(most));
     sinks_.push_back(sink);
@@ -61,9 +66,6 @@ private:
   std::vector<Sink<T> *> sinks_;
 };
 
-template <typename T>
-Stream<T> Range<T>::Stream() {
-  return {this};
-}
+template <typename T> Stream<T> Range<T>::Stream() { return {this}; }
 
 #endif // TOYS_STREAM_STREAM_H

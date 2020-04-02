@@ -50,9 +50,9 @@ public:
 
 template <typename T, typename Func> class MapSink : public BasicSink<T> {
 public:
-  template <typename std::enable_if_t<std::is_invocable_r_v<T, Func, const T &>,
-                                      int> = 0>
-  MapSink(Func func) : BasicSink<T>(), func_(func) {}
+  MapSink(Func func) : BasicSink<T>(), func_(func) {
+    static_assert(std::is_invocable_r_v<T, Func, const T &>);
+  }
   void Pre(size_t len) final { this->next_->Pre(len); }
   void Accept(const T &val) final { this->next_->Accept(func_(val)); }
   void Post() final { this->next_->Post(); }
@@ -62,9 +62,9 @@ public:
 
 template <typename T, typename Func> class FilterSink : public BasicSink<T> {
 public:
-  template <typename std::enable_if_t<
-                std::is_invocable_r_v<bool, Func, const T &>, int> = 0>
-  FilterSink(Func func) : BasicSink<T>(), func_(func) {}
+  FilterSink(Func func) : BasicSink<T>(), func_(func) {
+    static_assert(std::is_invocable_r_v<bool, Func, const T &>);
+  }
 
   void Pre(size_t len) final { this->next_->Pre(len); }
   void Accept(const T &val) final {
@@ -79,16 +79,15 @@ public:
 
 template <typename T, typename Less> class SortSink : public BasicSink<T> {
 public:
-  template <
-      typename std::enable_if_t<
-          std::is_invocable_r_v<bool, Less, const T &, const T &>, int> = 0>
-  SortSink(Less less) : less_(std::move(less)), vals_() {}
+  SortSink(Less less) : less_(std::move(less)), vals_() {
+    static_assert(std::is_invocable_r_v<bool, Less, const T &, const T &>);
+  }
 
   void Pre(size_t len) { vals_.reserve(len); }
   void Accept(const T &val) { vals_.push_back(val); }
   void Post() {
     std::sort(vals_.begin(), vals_.end(), less_);
-    auto range = BasicRange(vals_.begin(), vals_.end());
+    auto range = ItRange(vals_.begin(), vals_.end());
     this->next_->Evaluate(&range);
   }
 
@@ -122,12 +121,25 @@ private:
   std::vector<T> vals_;
 };
 
+template <typename T, typename Func> class ForEachSink : public FinalSink<T> {
+public:
+  ForEachSink(Func func) : FinalSink<T>(), func_(std::move(func)) {
+    static_assert(std::is_invocable_r_v<void, Func, const T &>);
+  }
+  void Pre(size_t len) final {}
+  void Accept(const T &val) final { func_(val); }
+  void Post() final {}
+
+private:
+  Func func_;
+};
+
 template <typename T, typename Most> class MostSink : public FinalSink<T> {
 public:
-  template <typename std::enable_if_t<
-                std::is_invocable_r_v<T, Most, const T &, const T &>, int> = 0>
   MostSink(Most most)
-      : FinalSink<T>(), is_first_(true), most_(std::move(most)) {}
+      : FinalSink<T>(), is_first_(true), most_(std::move(most)) {
+    static_assert(std::is_invocable_r_v<T, Most, const T &, const T &>);
+  }
 
   void Pre(size_t len) final {}
   void Accept(const T &val) final {

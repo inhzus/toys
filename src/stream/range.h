@@ -25,11 +25,11 @@ public:
 };
 
 template <typename It, typename T = std::decay_t<decltype(*std::declval<It>())>>
-class BasicRange : public Range<T> {
+class ItRange : public Range<T> {
 public:
-  BasicRange(It first, It last) : first_(first), last_(last), cur_(first_) {}
-  const T &Next() override {
-    const T &val = *cur_;
+  ItRange(It first, It last) : first_(first), last_(last), cur_(first_) {}
+  const T &Next() final {
+    T &val = *cur_;
     ++cur_;
     return val;
   }
@@ -40,31 +40,34 @@ private:
   It first_, last_, cur_;
 };
 
-template <typename T, typename Func> class StepRange : public Range<T> {
+template <typename T, typename StopFunc, typename StepFunc>
+class StepRange : public Range<T> {
 public:
   template <
-      std::enable_if_t<std::is_invocable_r_v<T, Func, const T &>, int> = 0>
-  StepRange(T start, T stop, Func func)
-      : start_(std::move(start)), stop_(std::move(stop)), val_(start),
-        next_(start), func_(std::move(func)) {}
+      std::enable_if_t<std::is_invocable_r_v<T, StepFunc, const T &>, int> = 0>
+  StepRange(T start, T stop, StepFunc func)
+      : start_(std::move(start)),
+        stop_([stop](const T &val) { return val == stop; }), val_(start),
+        next_(start), step_(std::move(func)) {}
   template <typename Step>
   StepRange(T start, T stop, Step step)
-      : start_(std::move(start)), stop_(std::move(stop)), val_(start),
-        next_(start), func_(std::function<T(const T &)>{
-                          [step](const T &val) { return val + step; }}) {}
+      : start_(std::move(start)),
+        stop_([stop](const T &val) { return val == stop; }), val_(start),
+        next_(start), step_([step](const T &val) { return val + step; }) {}
 
   const T &Next() final {
-    auto tmp = func_(next_);
+    auto tmp = step_(next_);
     std::swap(val_, next_);
     std::swap(next_, tmp);
     return val_;
   }
-  [[nodiscard]] bool Valid() const final { return val_ != stop_; }
+  [[nodiscard]] bool Valid() const final { return !stop_(val_); }
   [[nodiscard]] size_t Size() const final { return 0; }
 
 private:
-  T start_, stop_, val_, next_;
-  Func func_;
+  T start_, val_, next_;
+  StopFunc stop_;
+  StepFunc step_;
 };
 
 template <
@@ -72,6 +75,7 @@ template <
     typename std::enable_if_t<
         std::is_same_v<T, decltype(std::declval<T>() + std::declval<Step>())>,
         int> = 0>
-StepRange(T, T, Step)->StepRange<T, std::function<T(const T &)>>;
+StepRange(T, T, Step)
+    ->StepRange<T, std::function<bool(const T &)>, std::function<T(const T &)>>;
 
 #endif
