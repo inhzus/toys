@@ -26,14 +26,17 @@ public:
     }
   };
   template <typename Func> Stream &Map(Func func) {
+    static_assert(std::is_invocable_r_v<T, Func, const T &>);
     sinks_.push_back(new MapSink<T, Func>(std::move(func)));
     return *this;
   }
   template <typename Func> Stream &Filter(Func func) {
+    static_assert(std::is_invocable_r_v<bool, Func, const T &>);
     sinks_.push_back(new FilterSink<T, Func>(std::move(func)));
     return *this;
   }
   template <typename Less = std::less<T>> Stream &Sort(Less less = Less()) {
+    static_assert(std::is_invocable_r_v<bool, Less, const T &, const T &>);
     sinks_.push_back(new SortSink<T, Less>(std::move(less)));
     return *this;
   }
@@ -45,17 +48,20 @@ public:
     return vals;
   }
   template <typename Func> void ForEach(Func func) {
+    static_assert(std::is_invocable_r_v<void, Func, const T &>);
     auto sink = new ForEachSink<T, Func>(std::move(func));
     sinks_.push_back(sink);
     Evaluate();
   }
   template <typename Select> T Most(Select most) {
+    static_assert(std::is_invocable_r_v<T, Select, const T &, const T &>);
     auto sink = new MostSink<T, Select>(std::move(most));
     sinks_.push_back(sink);
     Evaluate();
     return std::move(sink->val());
   }
   template <typename Func> std::pair<bool, T> FindFirst(Func func) {
+    static_assert(std::is_invocable_r_v<bool, Func, const T &>);
     auto sink = new FindFirstSink<T, Func>(std::move(func));
     sinks_.push_back(sink);
     Evaluate();
