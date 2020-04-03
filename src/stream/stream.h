@@ -7,12 +7,20 @@
 #include "range.h"
 #include "sink.h"
 
-template <typename T> class Stream {
+template <typename R, typename T = std::decay_t<decltype(
+                          *std::declval<std::remove_pointer_t<R>>().begin())>>
+class Stream {
 public:
-  Stream(Range<T> *range) : range_(range) {
+  Stream(R &&range) : range_(std::move(range)) {
+    using Container = std::remove_pointer_t<R>;
+    static_assert(std::is_same_v<
+                  T, std::decay_t<decltype(*std::declval<Container>().end())>>);
+    static_assert(
+        std::is_convertible_v<
+            std::decay_t<decltype(std::declval<Container>().size())>, size_t>);
     sinks_.push_back(new HeadSink<T>());
   }
-  ~Stream() {
+  virtual ~Stream() {
     for (auto p : sinks_) {
       delete p;
     }
@@ -41,8 +49,8 @@ public:
     sinks_.push_back(sink);
     Evaluate();
   }
-  template <typename Most> T Most(Most most) {
-    auto sink = new MostSink<T, Most>(std::move(most));
+  template <typename Select> T Most(Select most) {
+    auto sink = new MostSink<T, Select>(std::move(most));
     sinks_.push_back(sink);
     Evaluate();
     return std::move(sink->val());
@@ -59,13 +67,14 @@ private:
     for (size_t i = 0; i + 1 < sinks_.size(); ++i) {
       sinks_[i]->set_next(sinks_[i + 1]);
     }
-    sinks_[0]->Evaluate(range_);
+    if constexpr (std::is_pointer_v<R>) {
+      sinks_[0]->Evaluate(*range_);
+    } else {
+      sinks_[0]->Evaluate(range_);
+    }
   }
-
-  Range<T> *range_;
+  R range_;
   std::vector<Sink<T> *> sinks_;
 };
-
-template <typename T> Stream<T> Range<T>::Stream() { return {this}; }
 
 #endif // TOYS_STREAM_STREAM_H

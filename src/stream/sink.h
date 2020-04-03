@@ -17,12 +17,12 @@ public:
   virtual void Accept(const T &val) = 0;
   virtual void Post() = 0;
 
-  void Evaluate(Range<T> *range) {
-    this->Pre(range->Size());
-    while (range->Valid()) {
+  template <typename R> void Evaluate(const R &range) {
+    this->Pre(range.size());
+    for (const auto &val : range) {
       if (this->Cancelled())
         break;
-      this->Accept(range->Next());
+      this->Accept(val);
     }
     this->Post();
   }
@@ -87,8 +87,7 @@ public:
   void Accept(const T &val) { vals_.push_back(val); }
   void Post() {
     std::sort(vals_.begin(), vals_.end(), less_);
-    auto range = ItRange(vals_.begin(), vals_.end());
-    this->next_->Evaluate(&range);
+    this->next_->Evaluate(vals_);
   }
 
 private:
