@@ -43,20 +43,14 @@ public:
   template <typename Func,
             typename U = std::decay_t<std::invoke_result_t<Func, const T &>>,
             std::enable_if_t<!std::is_same_v<T, U>, int> = 0>
-  Stream<std::remove_pointer_t<R> *, U> Map(Func func) {
+  Stream<R, U> Map(Func func) {
     static_assert(std::is_invocable_r_v<U, Func, const T &>);
     auto *cast = new CastSink<R, T, U>(std::move(*this));
     auto &elder = cast->stream();
     elder.sinks_.push_back(
         new MapObjSink<R, T, U, Func>(cast, std::move(func)));
     elder.MakeChain();
-    std::remove_pointer_t<R> *ptr;
-    if constexpr (std::is_pointer_v<R>) {
-      ptr = elder.range_;
-    } else {
-      ptr = &elder.range_;
-    }
-    Stream<std::remove_pointer_t<R> *, U> stream(std::move(ptr), cast);
+    Stream<R, U> stream(std::move(elder.range_), cast);
     return stream;
   }
   template <typename Func> Stream &FlatMap(Func func) {
@@ -122,7 +116,7 @@ private:
 
 template <typename R, typename T, typename U>
 void *CastSink<R, T, U>::Reciever() {
-  return stream_.sinks_[0];
+  return stream_.sinks_[0]->Reciever();
 }
 
 #endif // TOYS_STREAM_STREAM_H

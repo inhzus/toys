@@ -17,6 +17,7 @@ public:
   virtual void Pre(size_t len) = 0;
   virtual void Accept(const T &val) = 0;
   virtual void Post() = 0;
+  virtual void *Reciever() { return this; };
 
   template <typename R> void Evaluate(const R &range) {
     auto *recv = static_cast<Sink<value_type_of<R>> *>(Reciever());
@@ -33,7 +34,6 @@ public:
   void set_next(Sink *next) { next_ = next; }
 
 protected:
-  virtual void *Reciever() { return this; };
   Sink<T> *next_;
 };
 
@@ -57,11 +57,11 @@ public:
   CastSink(Stream<R, T> &&stream) : stream_(std::move(stream)) {}
   void Pre(size_t len) final { this->next_->Pre(len); };
   void Accept(const U &val) final { this->next_->Accept(val); };
-  void Post() final{this->next_->Post();};
+  void Post() final { this->next_->Post(); };
+  void *Reciever() final;
   Stream<R, T> &stream() { return stream_; }
 
 private:
-  void *Reciever() final;
   Stream<R, T> stream_;
 };
 
@@ -193,6 +193,7 @@ public:
   void Pre(size_t len) final { cast_->Pre(len); }
   void Accept(const T &val) final { cast_->Accept(func_(val)); }
   void Post() final { cast_->Post(); }
+  [[nodiscard]] bool Cancelled() const final { return cast_->Cancelled(); }
 
 private:
   CastSink<R, T, U> *cast_;

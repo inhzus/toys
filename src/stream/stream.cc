@@ -36,7 +36,13 @@ int main() {
 
   Stream(StepRange(0, 10, 1))
       .Map([](int val) { return std::to_string(val); })
-      .ForEach([](auto &s) { printf("%s ", s.c_str()); });
+      .Map([](const std::string &s) { return std::stoi(s); })
+      .ForEach([](auto val) { printf("%d ", val); });
   printf("\n---\n");
+  auto [_1, five] = Stream(StepRange(0, 10, 1))
+                        .Map([](int val) { return std::to_string(val); })
+                        .Map([](const std::string &s) { return std::stoi(s); })
+                        .FindFirst([](auto val) { return val > 4; });
+  printf("%d\n---\n", five);
   return 0;
 }
