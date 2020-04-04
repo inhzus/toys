@@ -1,18 +1,19 @@
 //
 // Copyright [2020] <inhzus>
 //
-#ifndef TOYS_STREAM_RANGE_H_
-#define TOYS_STREAM_RANGE_H_
+#ifndef TOYS_STREAM_STEP_RANGE_H_
+#define TOYS_STREAM_STEP_RANGE_H_
 
 #include <cstddef>
 #include <functional>
 #include <type_traits>
 #include <vector>
 
-template <typename T, typename ValidFunc, typename StepFunc> class StepRange {
-public:
+template <typename T, typename ValidFunc, typename StepFunc>
+class StepRange {
+ public:
   class Iterator {
-  public:
+   public:
     explicit Iterator(const StepRange *range) : range_(range) {
       cur_ = range_ == nullptr ? nullptr : new T(range_->start_);
     }
@@ -21,20 +22,17 @@ public:
     }
     Iterator &operator=(const Iterator &it) {
       range_ = it.range_;
-      if (cur_ != nullptr)
-        delete cur_;
+      if (cur_ != nullptr) delete cur_;
       cur_ = it.cur_ == nullptr ? nullptr : new T(it.cur_);
       return *this;
     }
     ~Iterator() {
-      if (cur_ != nullptr)
-        delete cur_;
+      if (cur_ != nullptr) delete cur_;
     }
 
     bool operator==(const Iterator &it) const {
       if (it.range_ == nullptr) {
-        if (range_ == nullptr)
-          return true;
+        if (range_ == nullptr) return true;
         return !range_->valid_func_(*cur_);
       }
       return range_ == it.range_ && cur_ == it.cur_;
@@ -52,7 +50,7 @@ public:
       return tmp;
     }
 
-  private:
+   private:
     const StepRange *range_;
     T *cur_;
   };
@@ -70,10 +68,12 @@ public:
         step_func_(std::move(step_func)) {}
   template <typename Step>
   StepRange(T start, ValidFunc valid_func, Step step)
-      : start_(std::move(start)), valid_func_(std::move(valid_func)),
+      : start_(std::move(start)),
+        valid_func_(std::move(valid_func)),
         step_func_([step = std::move(step)](T *val) { *val += step; }) {}
   StepRange(T start, ValidFunc valid_func, StepFunc step_func)
-      : start_(std::move(start)), valid_func_(std::move(valid_func)),
+      : start_(std::move(start)),
+        valid_func_(std::move(valid_func)),
         step_func_(std::move(step_func)) {}
   StepRange(StepRange &&) = default;
   StepRange &operator=(StepRange &&) = default;
@@ -82,7 +82,7 @@ public:
   Iterator end() const { return Iterator(nullptr); }
   [[nodiscard]] size_t size() const { return 0; }
 
-private:
+ private:
   T start_;
   ValidFunc valid_func_;
   StepFunc step_func_;
@@ -109,4 +109,4 @@ template <
 StepRange(T, ValidFunc, Step)
     ->StepRange<T, ValidFunc, std::function<void(T *)>>;
 
-#endif
+#endif  // TOYS_STREAM_STEP_RANGE_H_
