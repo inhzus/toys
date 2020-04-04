@@ -6,8 +6,9 @@
 #include <functional>
 #include <vector>
 
-#include "range.h"
 #include "traits.h"
+
+template <typename, typename> class Stream;
 
 template <typename T> class Sink {
 public:
@@ -18,19 +19,21 @@ public:
   virtual void Post() = 0;
 
   template <typename R> void Evaluate(const R &range) {
-    this->Pre(range.size());
+    auto *recv = static_cast<Sink<value_type_of<R>> *>(Reciever());
+    recv->Pre(range.size());
     for (const auto &val : range) {
-      if (this->Cancelled())
+      if (recv->Cancelled())
         break;
-      this->Accept(val);
+      recv->Accept(val);
     }
-    this->Post();
+    recv->Post();
   }
 
   [[nodiscard]] virtual bool Cancelled() const = 0;
   void set_next(Sink *next) { next_ = next; }
 
 protected:
+  virtual void *Reciever() { return this; };
   Sink<T> *next_;
 };
 
@@ -48,19 +51,50 @@ public:
   void Post() final { this->next_->Post(); }
 };
 
+template <typename R, typename T, typename U>
+class CastSink : public BasicSink<U> {
+public:
+  CastSink(Stream<R, T> &&stream) : stream_(std::move(stream)) {}
+  void Pre(size_t len) final { this->next_->Pre(len); };
+  void Accept(const U &val) final { this->next_->Accept(val); };
+  void Post() final{this->next_->Post();};
+  Stream<R, T> &stream() { return stream_; }
+
+private:
+  void *Reciever() final;
+  Stream<R, T> stream_;
+};
+
 template <typename T, typename Func> class MapSink : public BasicSink<T> {
 public:
-  MapSink(Func func) : BasicSink<T>(), func_(func) {}
+  MapSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
   void Pre(size_t len) final { this->next_->Pre(len); }
   void Accept(const T &val) final { this->next_->Accept(func_(val)); }
   void Post() final { this->next_->Post(); }
 
+private:
+  Func func_;
+};
+
+template <typename T, typename Func> class FlatMapSink : public BasicSink<T> {
+public:
+  FlatMapSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
+  void Pre(size_t len) final { this->next_->Pre(0); }
+  void Accept(const T &val) final {
+    auto container = func_(val);
+    for (const auto &item : container) {
+      this->next_->Accept(item);
+    }
+  }
+  void Post() final { this->next_->Post(); }
+
+private:
   Func func_;
 };
 
 template <typename T, typename Func> class FilterSink : public BasicSink<T> {
 public:
-  FilterSink(Func func) : BasicSink<T>(), func_(func) {}
+  FilterSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
 
   void Pre(size_t len) final { this->next_->Pre(len); }
   void Accept(const T &val) final {
@@ -70,6 +104,7 @@ public:
   }
   void Post() final { this->next_->Post(); }
 
+private:
   Func func_;
 };
 
@@ -148,6 +183,20 @@ private:
   bool is_first_;
   Select select_;
   T val_;
+};
+
+template <typename R, typename T, typename U, typename Func>
+class MapObjSink : public FinalSink<T> {
+public:
+  MapObjSink(CastSink<R, T, U> *cast, Func func)
+      : FinalSink<T>(), cast_(cast), func_(std::move(func)) {}
+  void Pre(size_t len) final { cast_->Pre(len); }
+  void Accept(const T &val) final { cast_->Accept(func_(val)); }
+  void Post() final { cast_->Post(); }
+
+private:
+  CastSink<R, T, U> *cast_;
+  Func func_;
 };
 
 template <typename T, typename Func>

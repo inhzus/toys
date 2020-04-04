@@ -66,5 +66,12 @@ template <typename Func, typename R>
 inline constexpr bool func_return_as_v =
     std::is_same_v<typename func_traits<Func>::result_type, R>;
 
-#endif // TOYS_STREAM_TRAITS_H
+template <typename C>
+using value_type_of = std::decay_t<decltype(*std::declval<C>().begin())>;
 
+template <typename C, typename T = value_type_of<C>>
+inline constexpr bool is_container_of =
+    std::is_same_v<T, std::decay_t<decltype(*std::declval<C>().end())>>
+        &&std::is_convertible_v<decltype(std::declval<C>().size()), size_t>;
+
+#endif // TOYS_STREAM_TRAITS_H

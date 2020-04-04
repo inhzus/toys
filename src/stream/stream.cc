@@ -33,5 +33,10 @@ int main() {
                          [](auto *val) { *val *= 2; }))
                   .Most([](auto lhs, auto rhs) { return std::max(lhs, rhs); });
   printf("%d\n---\n", max2);
+
+  Stream(StepRange(0, 10, 1))
+      .Map([](int val) { return std::to_string(val); })
+      .ForEach([](auto &s) { printf("%s ", s.c_str()); });
+  printf("\n---\n");
   return 0;
 }
