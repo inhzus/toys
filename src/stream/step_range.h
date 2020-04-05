@@ -14,6 +14,7 @@ class StepRange {
  public:
   class Iterator {
    public:
+    Iterator() : range_(nullptr), cur_(nullptr) {}
     explicit Iterator(const StepRange *range) : range_(range) {
       cur_ = range_ == nullptr ? nullptr : new T(range_->start_);
     }

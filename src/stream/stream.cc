@@ -57,5 +57,15 @@ int main() {
     printf("%c ", c);
   });
   printf("\n---\n");  // h e l l o w o r l d
+
+  Stream(StepRange(3, 6, 1))
+      .FlatMap([](int val) {
+        return Stream(StepRange(val, val + 6, 2))
+            .Map([](int val) { return val * val; })
+            .Sort([](int lhs, int rhs) { return lhs % 10 < rhs % 10; })
+            .Map([](int val) { return val % 10; });
+      })
+      .ForEach([](int val) { printf("%d ", val); });
+  printf("\n---\n");  // 5 9 9 4 6 6 1 5 9
   return 0;
 }

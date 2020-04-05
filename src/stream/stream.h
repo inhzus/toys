@@ -2,6 +2,7 @@
 #define TOYS_STREAM_STREAM_H_
 
 #include <functional>
+#include <queue>
 #include <vector>
 
 #include "sink.h"
@@ -15,6 +16,68 @@ class Stream {
   friend class CastSink;
   template <typename, typename>
   friend class Stream;
+
+  class Iterator {
+   public:
+    explicit Iterator(Stream<R, T> *stream)
+        : stop_(false),
+          stream_(stream),
+          head_(static_cast<Sink<value_type_of<R>> *>(
+              stream->sinks_[0]->Reciever())),
+          it_(stream_->range_.begin()) {
+      stream_->sinks_.push_back(
+          new ForEachSink<T, std::function<void(const T &)>>(
+              [&buf_ = buf_](const T &val) { buf_.emplace(val); }));
+      stream_->MakeChain();
+      head_->Pre(stream_->range_.size());
+      LoadNext();
+    }
+    explicit Iterator(std::nullptr_t)
+        : stop_(false), stream_(nullptr), head_(nullptr), it_() {}
+    bool operator==(const Iterator &it) const {
+      if (it.stream_ == nullptr) {
+        if (stream_ == nullptr) return true;
+        return buf_.empty() && stop_;
+      }
+      // not expected
+      return true;
+    }
+    bool operator!=(const Iterator &it) const { return !operator==(it); }
+    T &operator*() { return buf_.front(); }
+    T *operator->() { return &buf_.front(); }
+    T &operator++() {
+      buf_.pop();
+      LoadNext();
+      return buf_.front();
+    }
+    T operator++(int) {
+      T tmp = buf_.front();
+      ++*this;
+      return tmp;
+    }
+
+   private:
+    void LoadNext() {
+      while (buf_.empty()) {
+        if (stop_) return;
+        if (it_ == stream_->range_.end()) {
+          head_->Post();
+          stop_ = true;
+          return;
+        }
+        head_->Accept(*it_);
+        ++it_;
+      }
+    }
+
+    bool stop_;
+    Stream<R, T> *stream_;
+    Sink<value_type_of<R>> *head_;
+    std::decay_t<decltype(std::declval<std::remove_pointer_t<R>>().begin())>
+        it_;
+    std::queue<T> buf_;
+  };
+
   Stream(R &&range) : range_(std::move(range)) {
     using Container = std::remove_pointer_t<R>;
     using U = value_type_of<Container>;
@@ -28,7 +91,10 @@ class Stream {
             std::decay_t<decltype(std::declval<Container>().size())>, size_t>);
     sinks_.push_back(new HeadSink<T>());
   }
+  Stream(const Stream &) = delete;
   Stream(Stream &&) = default;
+  Stream &operator=(const Stream &) = delete;
+  Stream &operator=(Stream &&) = default;
   virtual ~Stream() {
     for (auto p : sinks_) {
       delete p;
@@ -37,10 +103,10 @@ class Stream {
   template <typename Func,
             typename U = std::decay_t<std::invoke_result_t<Func, const T &>>,
             std::enable_if_t<std::is_same_v<T, U>, int> = 0>
-  Stream &Map(Func func) {
+  Stream Map(Func func) {
     static_assert(std::is_invocable_r_v<T, Func, const T &>);
     sinks_.push_back(new MapSink<T, Func>(std::move(func)));
-    return *this;
+    return std::move(*this);
   }
   template <typename Func,
             typename U = std::decay_t<std::invoke_result_t<Func, const T &>>,
@@ -57,9 +123,9 @@ class Stream {
   template <typename Func,
             typename U = value_type_of<std::invoke_result_t<Func, const T &>>,
             std::enable_if_t<std::is_same_v<T, U>, int> = 0>
-  Stream &FlatMap(Func func) {
+  Stream FlatMap(Func func) {
     sinks_.push_back(new FlatMapSink<T, Func>(std::move(func)));
-    return *this;
+    return std::move(*this);
   }
   template <typename Func,
             typename U = value_type_of<std::invoke_result_t<Func, const T &>>,
@@ -74,16 +140,16 @@ class Stream {
     return stream;
   }
   template <typename Func>
-  Stream &Filter(Func func) {
+  Stream Filter(Func func) {
     static_assert(std::is_invocable_r_v<bool, Func, const T &>);
     sinks_.push_back(new FilterSink<T, Func>(std::move(func)));
-    return *this;
+    return std::move(*this);
   }
   template <typename Less = std::less<T>>
-  Stream &Sort(Less less = Less()) {
+  Stream Sort(Less less = Less()) {
     static_assert(std::is_invocable_r_v<bool, Less, const T &, const T &>);
     sinks_.push_back(new SortSink<T, Less>(std::move(less)));
-    return *this;
+    return std::move(*this);
   }
   std::vector<T> Collect() {
     auto sink = new CollectSink<T>();
@@ -115,6 +181,10 @@ class Stream {
     Evaluate();
     return {sink->Cancelled(), std::move(sink->val())};
   }
+
+  Iterator begin() { return Iterator(this); }
+  Iterator end() const { return Iterator(nullptr); }
+  [[nodiscard]] size_t size() const { return 0; }
 
  private:
   Stream(R &&range, Sink<T> *sink) : range_(std::move(range)), sinks_{sink} {}
