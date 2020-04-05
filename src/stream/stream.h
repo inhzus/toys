@@ -46,7 +46,6 @@ class Stream {
             typename U = std::decay_t<std::invoke_result_t<Func, const T &>>,
             std::enable_if_t<!std::is_same_v<T, U>, int> = 0>
   Stream<R, U> Map(Func func) {
-    static_assert(std::is_invocable_r_v<U, Func, const T &>);
     auto *cast = new CastSink<R, T, U>(std::move(*this));
     auto &elder = cast->stream();
     elder.sinks_.push_back(
@@ -55,10 +54,24 @@ class Stream {
     Stream<R, U> stream(std::move(elder.range_), cast);
     return stream;
   }
-  template <typename Func>
+  template <typename Func,
+            typename U = value_type_of<std::invoke_result_t<Func, const T &>>,
+            std::enable_if_t<std::is_same_v<T, U>, int> = 0>
   Stream &FlatMap(Func func) {
     sinks_.push_back(new FlatMapSink<T, Func>(std::move(func)));
     return *this;
+  }
+  template <typename Func,
+            typename U = value_type_of<std::invoke_result_t<Func, const T &>>,
+            std::enable_if_t<!std::is_same_v<T, U>, int> = 0>
+  Stream<R, U> FlatMap(Func func) {
+    auto *cast = new CastSink<R, T, U>(std::move(*this));
+    auto &elder = cast->stream();
+    elder.sinks_.push_back(
+        new FlatMapObjSink<R, T, U, Func>(cast, std::move(func)));
+    elder.MakeChain();
+    Stream<R, U> stream(std::move(elder.range_), cast);
+    return stream;
   }
   template <typename Func>
   Stream &Filter(Func func) {

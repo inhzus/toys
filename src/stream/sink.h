@@ -213,6 +213,26 @@ class MapObjSink : public FinalSink<T> {
   Func func_;
 };
 
+template <typename R, typename T, typename U, typename Func>
+class FlatMapObjSink : public FinalSink<T> {
+ public:
+  FlatMapObjSink(CastSink<R, T, U> *cast, Func func)
+      : FinalSink<T>(), cast_(cast), func_(std::move(func)) {}
+  void Pre(size_t len) final { cast_->Pre(0); }
+  void Accept(const T &val) final {
+    decltype(auto) vals = func_(val);
+    for (const auto &val : vals) {
+      cast_->Accept(val);
+    }
+  }
+  void Post() final { cast_->Post(); }
+  [[nodiscard]] bool Cancelled() const final { return cast_->Cancelled(); }
+
+ private:
+  CastSink<R, T, U> *cast_;
+  Func func_;
+};
+
 template <typename T, typename Func>
 class FindFirstSink : public BreakableSink<T> {
  public:
