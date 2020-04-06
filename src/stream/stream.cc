@@ -21,17 +21,19 @@ int main() {
   }
   printf("\n---\n");  // 18 25 11
 
-  auto max =
-      Stream(&sorted).Most([](int lhs, int rhs) { return std::max(lhs, rhs); });
+  auto max = Stream(&sorted).Reduce(
+      [](int lhs, int rhs) { return std::max(lhs, rhs); });
   printf("%d\n---\n", max);  // 25
-  auto max1 = Stream(StepRange(
-                         0, [](auto val) { return val < 17; }, 5))
-                  .Most([](auto lhs, auto rhs) { return std::max(lhs, rhs); });
+  auto max1 =
+      Stream(StepRange(
+                 0, [](auto val) { return val < 17; }, 5))
+          .Reduce([](auto lhs, auto rhs) { return std::max(lhs, rhs); });
   printf("%d\n---\n", max1);  // 15
-  auto max2 = Stream(StepRange(
-                         1, [](auto val) { return val < 17; },
-                         [](auto *val) { *val *= 2; }))
-                  .Most([](auto lhs, auto rhs) { return std::max(lhs, rhs); });
+  auto max2 =
+      Stream(StepRange(
+                 1, [](auto val) { return val < 17; },
+                 [](auto *val) { *val *= 2; }))
+          .Reduce([](auto lhs, auto rhs) { return std::max(lhs, rhs); });
   printf("%d\n---\n", max2);  // 16
 
   Stream(StepRange(0, 10, 1))
@@ -67,5 +69,25 @@ int main() {
       })
       .ForEach([](int val) { printf("%d ", val); });
   printf("\n---\n");  // 5 9 9 4 6 6 1 5 9
+
+  int sum = Stream(StepRange(1, 5, 1))
+                .Filter([](int val) { return val > 2; })
+                .Peek([](int val) { printf("%d ", val); })
+                .Map([](int val) { return val * val; })
+                .Peek([](int val) { printf("%d ", val); })
+                .Reduce([](int lhs, int rhs) { return lhs + rhs; });
+  printf("\n%d\n---\n", sum);  // 25
+
+  size_t limit_cnt = 0;
+  Stream(StepRange(
+             0, [](int val) { return true; }, 1))
+      .Peek([&limit_cnt](int) { ++limit_cnt; })
+      .Limit(3)
+      .Collect();
+  printf("%zu\n---\n", limit_cnt);
+
+  size_t cnt = 0;
+  Stream(StepRange(0, 6, 1)).Skip(3).Peek([&cnt](int) { ++cnt; }).Collect();
+  printf("%zu\n---\n", cnt);  // 3
   return 0;
 }

@@ -145,10 +145,24 @@ class Stream {
     sinks_.push_back(new FilterSink<T, Func>(std::move(func)));
     return std::move(*this);
   }
+  template <typename Func>
+  Stream Peek(Func func) {
+    static_assert(std::is_invocable_v<Func, const T &>);
+    sinks_.push_back(new PeekSink<T, Func>(std::move(func)));
+    return std::move(*this);
+  }
   template <typename Less = std::less<T>>
   Stream Sort(Less less = Less()) {
     static_assert(std::is_invocable_r_v<bool, Less, const T &, const T &>);
     sinks_.push_back(new SortSink<T, Less>(std::move(less)));
+    return std::move(*this);
+  }
+  Stream Limit(size_t max) {
+    sinks_.push_back(new LimitSink<T>(max));
+    return std::move(*this);
+  }
+  Stream Skip(size_t skip) {
+    sinks_.push_back(new SkipSink<T>(skip));
     return std::move(*this);
   }
   std::vector<T> Collect() {
@@ -165,10 +179,10 @@ class Stream {
     sinks_.push_back(sink);
     Evaluate();
   }
-  template <typename Select>
-  T Most(Select most) {
-    static_assert(std::is_invocable_r_v<T, Select, const T &, const T &>);
-    auto sink = new MostSink<T, Select>(std::move(most));
+  template <typename Func>
+  T Reduce(Func most) {
+    static_assert(std::is_invocable_r_v<T, Func, const T &, const T &>);
+    auto sink = new ReduceSink<T, Func>(std::move(most));
     sinks_.push_back(sink);
     Evaluate();
     return std::move(sink->val());

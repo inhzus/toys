@@ -89,6 +89,7 @@ class FlatMapSink : public BasicSink<T> {
   void Accept(const T &val) final {
     auto container = func_(val);
     for (const auto &item : container) {
+      if (this->next_->Cancelled()) return;
       this->next_->Accept(item);
     }
   }
@@ -115,14 +116,32 @@ class FilterSink : public BasicSink<T> {
   Func func_;
 };
 
+template <typename T, typename Func>
+class PeekSink : public BasicSink<T> {
+ public:
+  PeekSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
+
+  void Pre(size_t len) final { this->next_->Pre(len); }
+  void Accept(const T &val) final {
+    func_(val);
+    this->next_->Accept(val);
+  }
+  void Post() final { this->next_->Post(); }
+
+ private:
+  Func func_;
+};
+
+// stateful sinks
+
 template <typename T, typename Less>
 class SortSink : public BasicSink<T> {
  public:
   SortSink(Less less) : less_(std::move(less)), vals_() {}
 
-  void Pre(size_t len) { vals_.reserve(len); }
-  void Accept(const T &val) { vals_.push_back(val); }
-  void Post() {
+  void Pre(size_t len) final { vals_.reserve(len); }
+  void Accept(const T &val) final { vals_.push_back(val); }
+  void Post() final {
     std::sort(vals_.begin(), vals_.end(), less_);
     this->next_->Evaluate(vals_);
   }
@@ -130,6 +149,49 @@ class SortSink : public BasicSink<T> {
  private:
   Less less_;
   std::vector<T> vals_;
+};
+
+template <typename T>
+class LimitSink : public BasicSink<T> {
+ public:
+  LimitSink(size_t max) : BasicSink<T>(), cnt_(0), max_(max) {}
+  void Pre(size_t len) final { this->next_->Pre(std::max(len, max_)); }
+  void Accept(const T &val) final {
+    if (cnt_ < max_) {
+      ++cnt_;
+      this->next_->Accept(val);
+    }
+  }
+  void Post() final { this->next_->Post(); }
+  [[nodiscard]] bool Cancelled() const final {
+    return cnt_ >= max_ || this->next_->Cancelled();
+  }
+
+ private:
+  size_t cnt_;
+  size_t max_;
+};
+
+template <typename T>
+class SkipSink : public BasicSink<T> {
+ public:
+  SkipSink(size_t skip) : BasicSink<T>(), cnt_(0), skip_(skip) {}
+  void Pre(size_t len) final { 
+    len = len > skip_ ? len - skip_ : 0;
+    this->next_->Pre(len);
+  }
+  void Accept(const T &val) final {
+    if (cnt_ < skip_) {
+      ++cnt_;
+    } else {
+    this->next_->Accept(val);
+    }
+  }
+  void Post() final { this->next_->Post(); }
+
+ private:
+  size_t cnt_;
+  size_t skip_;
 };
 
 template <typename T>
@@ -172,10 +234,10 @@ class ForEachSink : public FinalSink<T> {
   Func func_;
 };
 
-template <typename T, typename Select>
-class MostSink : public FinalSink<T> {
+template <typename T, typename Func>
+class ReduceSink : public FinalSink<T> {
  public:
-  MostSink(Select most)
+  ReduceSink(Func most)
       : FinalSink<T>(), is_first_(true), select_(std::move(most)) {}
 
   void Pre(size_t len) final {}
@@ -194,7 +256,7 @@ class MostSink : public FinalSink<T> {
 
  private:
   bool is_first_;
-  Select select_;
+  Func select_;
   T val_;
 };
 
@@ -222,6 +284,7 @@ class FlatMapObjSink : public FinalSink<T> {
   void Accept(const T &val) final {
     decltype(auto) vals = func_(val);
     for (const auto &val : vals) {
+      if (cast_->Cancelled()) return;
       cast_->Accept(val);
     }
   }
