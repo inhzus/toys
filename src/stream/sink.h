@@ -141,7 +141,7 @@ class SortSink : public BasicSink<T> {
   SortSink(Less less) : less_(std::move(less)), vals_() {}
 
   void Pre(size_t len) final { vals_.reserve(len); }
-  void Accept(const T &val) final { vals_.push_back(val); }
+  void Accept(const T &val) final { vals_.emplace_back(val); }
   void Post() final {
     std::sort(vals_.begin(), vals_.end(), less_);
     this->next_->Evaluate(vals_);

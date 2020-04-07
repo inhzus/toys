@@ -2,6 +2,7 @@
 #define TOYS_STREAM_STREAM_H_
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <queue>
 #include <vector>
@@ -26,9 +27,9 @@ class Stream {
           head_(static_cast<Sink<value_type_of<R>> *>(
               stream->sinks_[0]->Reciever())),
           it_(stream_->range_.begin()) {
-      stream_->sinks_.push_back(
-          new ForEachSink<T, std::function<void(const T &)>>(
-              [&buf_ = buf_](const T &val) { buf_.emplace(val); }));
+      stream_->sinks_.emplace_back(
+          std::make_unique<ForEachSink<T, std::function<void(const T &)>>>(
+              [&buf = buf_](const T &val) { buf.emplace(val); }));
       stream_->MakeChain();
       head_->Pre(stream_->range_.size());
       LoadNext();
@@ -90,91 +91,88 @@ class Stream {
     static_assert(
         std::is_convertible_v<
             std::decay_t<decltype(std::declval<Container>().size())>, size_t>);
-    sinks_.push_back(new HeadSink<T>());
+    sinks_.emplace_back(std::make_unique<HeadSink<T>>());
   }
   Stream(const Stream &) = delete;
   Stream(Stream &&) = default;
   Stream &operator=(const Stream &) = delete;
   Stream &operator=(Stream &&) = default;
-  virtual ~Stream() {
-    for (auto p : sinks_) {
-      delete p;
-    }
-  };
   template <typename Func,
             typename U = std::decay_t<std::invoke_result_t<Func, const T &>>,
             std::enable_if_t<std::is_same_v<T, U>, int> = 0>
   Stream Map(Func func) {
     static_assert(std::is_invocable_r_v<T, Func, const T &>);
-    sinks_.push_back(new MapSink<T, Func>(std::move(func)));
+    sinks_.emplace_back(std::make_unique<MapSink<T, Func>>(std::move(func)));
     return std::move(*this);
   }
   template <typename Func,
             typename U = std::decay_t<std::invoke_result_t<Func, const T &>>,
             std::enable_if_t<!std::is_same_v<T, U>, int> = 0>
   Stream<R, U> Map(Func func) {
-    auto *cast = new CastSink<R, T, U>(std::move(*this));
+    auto cast = std::make_unique<CastSink<R, T, U>>(std::move(*this));
     auto &elder = cast->stream();
-    elder.sinks_.push_back(
-        new MapObjSink<R, T, U, Func>(cast, std::move(func)));
+    elder.sinks_.emplace_back(std::make_unique<MapObjSink<R, T, U, Func>>(
+        cast.get(), std::move(func)));
     elder.MakeChain();
-    Stream<R, U> stream(std::move(elder.range_), cast);
+    Stream<R, U> stream(std::move(elder.range_), std::move(cast));
     return stream;
   }
   template <typename Func,
             typename U = value_type_of<std::invoke_result_t<Func, const T &>>,
             std::enable_if_t<std::is_same_v<T, U>, int> = 0>
   Stream FlatMap(Func func) {
-    sinks_.push_back(new FlatMapSink<T, Func>(std::move(func)));
+    sinks_.emplace_back(
+        std::make_unique<FlatMapSink<T, Func>>(std::move(func)));
     return std::move(*this);
   }
   template <typename Func,
             typename U = value_type_of<std::invoke_result_t<Func, const T &>>,
             std::enable_if_t<!std::is_same_v<T, U>, int> = 0>
   Stream<R, U> FlatMap(Func func) {
-    auto *cast = new CastSink<R, T, U>(std::move(*this));
+    auto cast = std::make_unique<CastSink<R, T, U>>(std::move(*this));
     auto &elder = cast->stream();
-    elder.sinks_.push_back(
-        new FlatMapObjSink<R, T, U, Func>(cast, std::move(func)));
+    elder.sinks_.emplace_back(std::make_unique<FlatMapObjSink<R, T, U, Func>>(
+        cast.get(), std::move(func)));
     elder.MakeChain();
-    Stream<R, U> stream(std::move(elder.range_), cast);
+    Stream<R, U> stream(std::move(elder.range_), std::move(cast));
     return stream;
   }
   template <typename Func>
   Stream Filter(Func func) {
     static_assert(std::is_invocable_r_v<bool, Func, const T &>);
-    sinks_.push_back(new FilterSink<T, Func>(std::move(func)));
+    sinks_.emplace_back(std::make_unique<FilterSink<T, Func>>(std::move(func)));
     return std::move(*this);
   }
   template <typename Func>
   Stream Peek(Func func) {
     static_assert(std::is_invocable_v<Func, const T &>);
-    sinks_.push_back(new PeekSink<T, Func>(std::move(func)));
+    sinks_.emplace_back(std::make_unique<PeekSink<T, Func>>(std::move(func)));
     return std::move(*this);
   }
   template <typename Less = std::less<T>>
   Stream Sort(Less less = Less()) {
     static_assert(std::is_invocable_r_v<bool, Less, const T &, const T &>);
-    sinks_.push_back(new SortSink<T, Less>(std::move(less)));
+    sinks_.emplace_back(std::make_unique<SortSink<T, Less>>(std::move(less)));
     return std::move(*this);
   }
   Stream Limit(size_t max) {
-    sinks_.push_back(new LimitSink<T>(max));
+    sinks_.emplace_back(std::make_unique<LimitSink<T>>(max));
     return std::move(*this);
   }
   Stream Skip(size_t skip) {
-    sinks_.push_back(new SkipSink<T>(skip));
+    sinks_.emplace_back(std::make_unique<SkipSink<T>>(skip));
     return std::move(*this);
   }
   template <typename Hash = std::hash<T>>
   Stream Distinct(Hash hash = Hash()) {
     static_assert(std::is_invocable_r_v<size_t, Hash, const T &>);
-    sinks_.push_back(new DistinctSink<T, Hash>(std::move(hash)));
+    sinks_.emplace_back(
+        std::make_unique<DistinctSink<T, Hash>>(std::move(hash)));
     return std::move(*this);
   }
   std::vector<T> Collect() {
-    auto sink = new CollectSink<T>();
-    sinks_.push_back(sink);
+    auto *sink = new CollectSink<T>();
+    sinks_.emplace_back(std::unique_ptr<CollectSink<T>>(sink));
     Evaluate();
     std::vector<T> vals(std::move(sink->vals()));
     return vals;
@@ -182,29 +180,29 @@ class Stream {
   template <typename Func>
   void ForEach(Func func) {
     static_assert(std::is_invocable_r_v<void, Func, const T &>);
-    auto sink = new ForEachSink<T, Func>(std::move(func));
-    sinks_.push_back(sink);
+    sinks_.emplace_back(
+        std::make_unique<ForEachSink<T, Func>>(std::move(func)));
     Evaluate();
   }
   template <typename Func>
   T Reduce(Func most) {
     static_assert(std::is_invocable_r_v<T, Func, const T &, const T &>);
-    auto sink = new ReduceSink<T, Func>(std::move(most));
-    sinks_.push_back(sink);
+    auto *sink = new ReduceSink<T, Func>(std::move(most));
+    sinks_.emplace_back(std::unique_ptr<ReduceSink<T, Func>>(sink));
     Evaluate();
     return std::move(sink->val());
   }
   template <typename Func>
   std::optional<T> FindFirst(Func func) {
     static_assert(std::is_invocable_r_v<bool, Func, const T &>);
-    auto sink = new FindFirstSink<T, Func>(std::move(func));
-    sinks_.push_back(sink);
+    auto *sink = new FindFirstSink<T, Func>(std::move(func));
+    sinks_.emplace_back(std::unique_ptr<FindFirstSink<T, Func>>(sink));
     Evaluate();
     return sink->Cancelled() ? std::optional<T>() : std::move(sink->val());
   }
   size_t Count() {
-    auto sink = new CountSink<T>();
-    sinks_.push_back(sink);
+    auto *sink = new CountSink<T>();
+    sinks_.emplace_back(std::unique_ptr<CountSink<T>>(sink));
     Evaluate();
     return sink->cnt();
   }
@@ -214,7 +212,10 @@ class Stream {
   [[nodiscard]] size_t size() const { return 0; }
 
  private:
-  Stream(R &&range, Sink<T> *sink) : range_(std::move(range)), sinks_{sink} {}
+  Stream(R &&range, std::unique_ptr<Sink<T>> &&sink)
+      : range_(std::move(range)) {
+    sinks_.emplace_back(std::move(sink));
+  }
   void Evaluate() {
     MakeChain();
     if constexpr (std::is_pointer_v<R>) {
@@ -225,11 +226,11 @@ class Stream {
   }
   void MakeChain() {
     for (size_t i = 0; i + 1 < sinks_.size(); ++i) {
-      sinks_[i]->set_next(sinks_[i + 1]);
+      sinks_[i]->set_next(sinks_[i + 1].get());
     }
   }
   R range_;
-  std::vector<Sink<T> *> sinks_;
+  std::vector<std::unique_ptr<Sink<T>>> sinks_;
 };
 
 template <typename R, typename T, typename U>
