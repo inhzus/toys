@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstddef>
 #include <functional>
+#include <unordered_set>
 #include <vector>
 
 #include "traits.h"
@@ -104,7 +105,7 @@ class FilterSink : public BasicSink<T> {
  public:
   FilterSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
 
-  void Pre(size_t len) final { this->next_->Pre(len); }
+  void Pre(size_t len) final { this->next_->Pre(0); }
   void Accept(const T &val) final {
     if (func_(val)) {
       this->next_->Accept(val);
@@ -155,7 +156,7 @@ template <typename T>
 class LimitSink : public BasicSink<T> {
  public:
   LimitSink(size_t max) : BasicSink<T>(), cnt_(0), max_(max) {}
-  void Pre(size_t len) final { this->next_->Pre(std::max(len, max_)); }
+  void Pre(size_t len) final { this->next_->Pre(std::min(len, max_)); }
   void Accept(const T &val) final {
     if (cnt_ < max_) {
       ++cnt_;
@@ -176,7 +177,7 @@ template <typename T>
 class SkipSink : public BasicSink<T> {
  public:
   SkipSink(size_t skip) : BasicSink<T>(), cnt_(0), skip_(skip) {}
-  void Pre(size_t len) final { 
+  void Pre(size_t len) final {
     len = len > skip_ ? len - skip_ : 0;
     this->next_->Pre(len);
   }
@@ -184,7 +185,7 @@ class SkipSink : public BasicSink<T> {
     if (cnt_ < skip_) {
       ++cnt_;
     } else {
-    this->next_->Accept(val);
+      this->next_->Accept(val);
     }
   }
   void Post() final { this->next_->Post(); }
@@ -192,6 +193,22 @@ class SkipSink : public BasicSink<T> {
  private:
   size_t cnt_;
   size_t skip_;
+};
+
+template <typename T, typename Hash>
+class DistinctSink : public BasicSink<T> {
+ public:
+  DistinctSink(Hash hash) : set_(0, std::move(hash)) {}
+  void Pre(size_t) final { this->next_->Pre(0); }
+  void Accept(const T &val) final {
+    if (set_.insert(val).second) {
+      this->next_->Accept(val);
+    }
+  }
+  void Post() final { this->next_->Post(); }
+
+ private:
+  std::unordered_set<T, Hash> set_;
 };
 
 template <typename T>
@@ -313,6 +330,24 @@ class FindFirstSink : public BreakableSink<T> {
  private:
   Func func_;
   T val_;
+};
+
+template <typename T>
+class CountSink : public BreakableSink<T> {
+ public:
+  CountSink() : BreakableSink<T>(), cnt_(0) {}
+  void Pre(size_t len) final {
+    if (len != 0) {
+      cnt_ = len;
+      this->cancelled_ = true;
+    }
+  }
+  void Accept(const T &) final { ++cnt_; }
+  void Post() final {}
+  size_t cnt() { return cnt_; }
+
+ private:
+  size_t cnt_;
 };
 
 #endif  // TOYS_STREAM_SINK_H_

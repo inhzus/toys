@@ -10,9 +10,9 @@ int main() {
       .Filter([](auto val) { return val % 2 == 1; })
       .ForEach([](auto val) { printf("%d ", val); });
   printf("\n---\n");  // 1 9 25 49 81
-  auto [found, val] =
+  auto val =
       Stream(StepRange(0, 30, 1)).FindFirst([](int val) { return val > 20; });
-  printf("%d\n---\n", val);  // 21
+  printf("%d\n---\n", *val);  // 21
   auto sorted = Stream(StepRange(25, 4, [](auto *val) { *val -= 7; }))
                     .Sort([](int lhs, int rhs) { return lhs % 17 < rhs % 17; })
                     .Collect();
@@ -41,11 +41,11 @@ int main() {
       .Map([](const std::string &s) { return std::stoi(s); })
       .ForEach([](auto val) { printf("%d ", val); });
   printf("\n---\n");  // 0 1 2 3 4 5 6 7 8 9
-  auto [_1, five] = Stream(StepRange(0, 10, 1))
-                        .Map([](int val) { return std::to_string(val); })
-                        .Map([](const std::string &s) { return std::stoi(s); })
-                        .FindFirst([](auto val) { return val > 4; });
-  printf("%d\n---\n", five);  // 5
+  auto five = Stream(StepRange(0, 10, 1))
+                  .Map([](int val) { return std::to_string(val); })
+                  .Map([](const std::string &s) { return std::stoi(s); })
+                  .FindFirst([](auto val) { return val > 4; });
+  printf("%d\n---\n", *five);  // 5
 
   Stream(StepRange(0, 12, 3))
       .FlatMap([](int val) {
@@ -89,5 +89,19 @@ int main() {
   size_t cnt = 0;
   Stream(StepRange(0, 6, 1)).Skip(3).Peek([&cnt](int) { ++cnt; }).Collect();
   printf("%zu\n---\n", cnt);  // 3
+
+  Stream(StepRange(
+             0, [](int) { return true; }, [](int *it) { *it = (*it + 1) % 3; }))
+      .Limit(12)
+      .Distinct()
+      .ForEach([](int val) { printf("%d ", val); });
+  printf("\n---\n");  // 0 1 2
+
+  auto cnt1 = Stream(StepRange(
+                         0, [](int) { return true; }, 1))
+                  .Limit(10)
+                  .Filter([](int val) { return val % 2; })
+                  .Count();
+  printf("%zu\n---\n", cnt1);  // 5
   return 0;
 }

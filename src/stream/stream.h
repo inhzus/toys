@@ -2,6 +2,7 @@
 #define TOYS_STREAM_STREAM_H_
 
 #include <functional>
+#include <optional>
 #include <queue>
 #include <vector>
 
@@ -165,6 +166,12 @@ class Stream {
     sinks_.push_back(new SkipSink<T>(skip));
     return std::move(*this);
   }
+  template <typename Hash = std::hash<T>>
+  Stream Distinct(Hash hash = Hash()) {
+    static_assert(std::is_invocable_r_v<size_t, Hash, const T &>);
+    sinks_.push_back(new DistinctSink<T, Hash>(std::move(hash)));
+    return std::move(*this);
+  }
   std::vector<T> Collect() {
     auto sink = new CollectSink<T>();
     sinks_.push_back(sink);
@@ -188,12 +195,18 @@ class Stream {
     return std::move(sink->val());
   }
   template <typename Func>
-  std::pair<bool, T> FindFirst(Func func) {
+  std::optional<T> FindFirst(Func func) {
     static_assert(std::is_invocable_r_v<bool, Func, const T &>);
     auto sink = new FindFirstSink<T, Func>(std::move(func));
     sinks_.push_back(sink);
     Evaluate();
-    return {sink->Cancelled(), std::move(sink->val())};
+    return sink->Cancelled() ? std::optional<T>() : std::move(sink->val());
+  }
+  size_t Count() {
+    auto sink = new CountSink<T>();
+    sinks_.push_back(sink);
+    Evaluate();
+    return sink->cnt();
   }
 
   Iterator begin() { return Iterator(this); }
