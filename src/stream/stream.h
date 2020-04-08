@@ -1,3 +1,6 @@
+//
+// Copyright [2020] <inhzus>
+//
 #ifndef TOYS_STREAM_STREAM_H_
 #define TOYS_STREAM_STREAM_H_
 
@@ -5,10 +8,11 @@
 #include <memory>
 #include <optional>
 #include <queue>
+#include <utility>
 #include <vector>
 
-#include "sink.h"
-#include "step_range.h"
+#include "./sink.h"
+#include "./step_range.h"
 
 template <typename R, typename T = std::decay_t<decltype(
                           *std::declval<std::remove_pointer_t<R>>().begin())>>
@@ -80,7 +84,7 @@ class Stream {
     std::queue<T> buf_;
   };
 
-  Stream(R &&range) : range_(std::move(range)) {
+  explicit Stream(R &&range) : range_(std::move(range)) {
     using Container = std::remove_pointer_t<R>;
     using U = value_type_of<Container>;
     static_assert(

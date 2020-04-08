@@ -2,7 +2,10 @@
 // Copyright [2020] <inhzus>
 //
 
-#include "stream.h"
+#include <algorithm>
+#include <string>
+
+#include "./stream.h"
 
 int main() {
   Stream(StepRange(0, 10, 1))

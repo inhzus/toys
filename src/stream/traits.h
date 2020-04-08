@@ -6,6 +6,7 @@
 #define TOYS_STREAM_TRAITS_H_
 
 #include <functional>
+#include <tuple>
 
 template <typename T>
 struct remove_func_class {

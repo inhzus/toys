@@ -1,13 +1,18 @@
+//
+// Copyright [2020] <inhzus>
+//
 #ifndef TOYS_STREAM_SINK_H_
 #define TOYS_STREAM_SINK_H_
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <functional>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
-#include "traits.h"
+#include "./traits.h"
 
 template <typename, typename>
 class Stream;
@@ -20,7 +25,7 @@ class Sink {
   virtual void Pre(size_t len) = 0;
   virtual void Accept(const T &val) = 0;
   virtual void Post() = 0;
-  virtual void *Reciever() { return this; };
+  virtual void *Reciever() { return this; }
 
   template <typename R>
   void Evaluate(const R &range) {
@@ -59,7 +64,7 @@ class HeadSink : public BasicSink<T> {
 template <typename R, typename T, typename U>
 class CastSink : public BasicSink<U> {
  public:
-  CastSink(Stream<R, T> &&stream) : stream_(std::move(stream)) {}
+  explicit CastSink(Stream<R, T> &&stream) : stream_(std::move(stream)) {}
   void Pre(size_t len) final { this->next_->Pre(len); };
   void Accept(const U &val) final { this->next_->Accept(val); };
   void Post() final { this->next_->Post(); };
@@ -73,7 +78,7 @@ class CastSink : public BasicSink<U> {
 template <typename T, typename Func>
 class MapSink : public BasicSink<T> {
  public:
-  MapSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
+  explicit MapSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
   void Pre(size_t len) final { this->next_->Pre(len); }
   void Accept(const T &val) final { this->next_->Accept(func_(val)); }
   void Post() final { this->next_->Post(); }
@@ -85,7 +90,7 @@ class MapSink : public BasicSink<T> {
 template <typename T, typename Func>
 class FlatMapSink : public BasicSink<T> {
  public:
-  FlatMapSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
+  explicit FlatMapSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
   void Pre(size_t len) final { this->next_->Pre(0); }
   void Accept(const T &val) final {
     auto container = func_(val);
@@ -103,7 +108,7 @@ class FlatMapSink : public BasicSink<T> {
 template <typename T, typename Func>
 class FilterSink : public BasicSink<T> {
  public:
-  FilterSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
+  explicit FilterSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
 
   void Pre(size_t len) final { this->next_->Pre(0); }
   void Accept(const T &val) final {
@@ -120,7 +125,7 @@ class FilterSink : public BasicSink<T> {
 template <typename T, typename Func>
 class PeekSink : public BasicSink<T> {
  public:
-  PeekSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
+  explicit PeekSink(Func func) : BasicSink<T>(), func_(std::move(func)) {}
 
   void Pre(size_t len) final { this->next_->Pre(len); }
   void Accept(const T &val) final {
@@ -138,7 +143,7 @@ class PeekSink : public BasicSink<T> {
 template <typename T, typename Less>
 class SortSink : public BasicSink<T> {
  public:
-  SortSink(Less less) : less_(std::move(less)), vals_() {}
+  explicit SortSink(Less less) : less_(std::move(less)), vals_() {}
 
   void Pre(size_t len) final { vals_.reserve(len); }
   void Accept(const T &val) final { vals_.emplace_back(val); }
@@ -155,7 +160,7 @@ class SortSink : public BasicSink<T> {
 template <typename T>
 class LimitSink : public BasicSink<T> {
  public:
-  LimitSink(size_t max) : BasicSink<T>(), cnt_(0), max_(max) {}
+  explicit LimitSink(size_t max) : BasicSink<T>(), cnt_(0), max_(max) {}
   void Pre(size_t len) final { this->next_->Pre(std::min(len, max_)); }
   void Accept(const T &val) final {
     if (cnt_ < max_) {
@@ -176,7 +181,7 @@ class LimitSink : public BasicSink<T> {
 template <typename T>
 class SkipSink : public BasicSink<T> {
  public:
-  SkipSink(size_t skip) : BasicSink<T>(), cnt_(0), skip_(skip) {}
+  explicit SkipSink(size_t skip) : BasicSink<T>(), cnt_(0), skip_(skip) {}
   void Pre(size_t len) final {
     len = len > skip_ ? len - skip_ : 0;
     this->next_->Pre(len);
@@ -198,7 +203,7 @@ class SkipSink : public BasicSink<T> {
 template <typename T, typename Hash>
 class DistinctSink : public BasicSink<T> {
  public:
-  DistinctSink(Hash hash) : set_(0, std::move(hash)) {}
+  explicit DistinctSink(Hash hash) : set_(0, std::move(hash)) {}
   void Pre(size_t) final { this->next_->Pre(0); }
   void Accept(const T &val) final {
     if (set_.insert(val).second) {
@@ -242,7 +247,7 @@ class CollectSink : public FinalSink<T> {
 template <typename T, typename Func>
 class ForEachSink : public FinalSink<T> {
  public:
-  ForEachSink(Func func) : FinalSink<T>(), func_(std::move(func)) {}
+  explicit ForEachSink(Func func) : FinalSink<T>(), func_(std::move(func)) {}
   void Pre(size_t len) final {}
   void Accept(const T &val) final { func_(val); }
   void Post() final {}
@@ -254,7 +259,7 @@ class ForEachSink : public FinalSink<T> {
 template <typename T, typename Func>
 class ReduceSink : public FinalSink<T> {
  public:
-  ReduceSink(Func most)
+  explicit ReduceSink(Func most)
       : FinalSink<T>(), is_first_(true), select_(std::move(most)) {}
 
   void Pre(size_t len) final {}
@@ -316,7 +321,8 @@ class FlatMapObjSink : public FinalSink<T> {
 template <typename T, typename Func>
 class FindFirstSink : public BreakableSink<T> {
  public:
-  FindFirstSink(Func func) : BreakableSink<T>(), func_(std::move(func)){};
+  explicit FindFirstSink(Func func)
+      : BreakableSink<T>(), func_(std::move(func)) {}
   void Pre(size_t len) final {}
   void Accept(const T &val) final {
     if (func_(val)) {
