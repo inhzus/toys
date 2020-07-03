@@ -26,6 +26,7 @@ using remove_func_class_t = typename remove_func_class<T>::type;
 template <typename T, typename = void>
 struct func_traits : func_traits<remove_func_class_t<T>> {};
 template <typename R, typename... Args> struct func_traits<R (*)(Args...)> {
+  using decay_type = R(Args...);
   using result_type = R;
   using args_type = std::tuple<Args...>;
   template <size_t idx>
@@ -38,6 +39,18 @@ struct func_traits<T, decltype(&T::operator(), void())>
 // template <typename T, typename... Args>
 // struct func_traits<T, decltype(&T::template operator()<Args...>, void())>
 //     : public func_traits<decltype(&T::template operator()<Args...>)> {};
+
+template <typename T> struct template_traits;
+
+template <template <typename...> class C, typename... Ts>
+struct template_traits<C<Ts...>> {
+  template<typename... Rs>
+  using raw_type = C<Rs...>;
+  using params_type = std::tuple<Ts...>;
+  template <std::size_t idx>
+  using param_type_at = typename std::tuple_element_t<idx, params_type>;
+  static constexpr size_t param_count = sizeof...(Ts);
+};
 
 namespace foo {
 struct Bar {
@@ -61,4 +74,3 @@ int main() {
   func_traits<decltype(&go_temp<int>)> d;
   return 0;
 }
-
