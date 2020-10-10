@@ -79,4 +79,15 @@ inline constexpr bool is_container_of =
     std::is_same_v<T, std::decay_t<decltype(*std::declval<C>().end())>>
         &&std::is_convertible_v<decltype(std::declval<C>().size()), size_t>;
 
+template <typename T>
+struct template_traits;
+
+template <template <typename...> class C, typename... Ts>
+struct template_traits<C<Ts...>> {
+  static constexpr std::size_t type_count = sizeof...(Ts);
+
+  template <std::size_t N>
+  using param_t = typename std::tuple_element<N, std::tuple<Ts...>>::type;
+};
+
 #endif  // TOYS_STREAM_TRAITS_H_
