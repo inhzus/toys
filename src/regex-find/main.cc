@@ -57,7 +57,7 @@ class Finder {
       };
     }
   }
-  void parse(const path &p) {
+  void Parse(const path &p) {
     stack<path> pathes;
     pathes.push(p);
     while (!pathes.empty()) {
@@ -81,11 +81,15 @@ class Finder {
           continue;
         }
         auto parent_path_len = leaf_name.size() - filename.size();
+        string match_segment = match.str();
         string_view parent_name{
-            string_view{leaf_name}.substr(0, parent_path_len)};
-        fmt::print("{}{}{}{}\n", parent_name, match.prefix().str(),
-                   fmt::format(fmt::fg(fmt::color::light_green), match.str()),
-                   match.suffix().str());
+            string_view{leaf_name}.substr(0, parent_path_len)},
+            prefix{string_view{filename}.substr(0, match.position())},
+            suffix{string_view{filename}.substr(match.position() +
+                                                match_segment.size())};
+        fmt::print("{}{}{}{}\n", parent_name, prefix,
+                   fmt::format(fmt::fg(fmt::color::light_green), match_segment),
+                   suffix);
       }
     }
   }
@@ -136,14 +140,14 @@ int main(int argc, char **argv) {
         "USAGE:\n"
         "    rf [OPTIONS] <PATTERN>\n\n"
         "OPTIONS:\n"
-        "    -c     Case sensitive\n"
-        "    -d     Include results which are directories\n"
-        "    -f     Full match\n"
-        "    -h     Prints help information\n"
-        "    -i     Ignores hidden files and directories\n"
-        "    -p     Root path\n"
-        "    -x     Can be used multiple times to exclude directories\n"
-        "           or files.\n");
+        "    -c         Case sensitive\n"
+        "    -d         Include results which are directories\n"
+        "    -f         Full match\n"
+        "    -h         Prints help information\n"
+        "    -i         Ignores hidden files and directories\n"
+        "    -p <path>  Root path\n"
+        "    -x         Can be used multiple times to exclude directories\n"
+        "               or files.\n");
     return argc < 2;
   }
   Options options;
@@ -155,7 +159,6 @@ int main(int argc, char **argv) {
   char *arg_path = parser.Get("-p");
   path root_path(arg_path == nullptr ? current_path() : arg_path);
   Finder finder(argv[argc - 1], std::move(options));
-  finder.parse(relative(root_path));
+  finder.Parse(relative(root_path));
   return 0;
 }
-bool flag;
